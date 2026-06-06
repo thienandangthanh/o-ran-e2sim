@@ -22,14 +22,13 @@
 #define ENCODE_E2APV1_HPP
 
 #include <vector>
-#include <e2sim.hpp>
 
 
 extern "C" {
 
 #include "E2AP-PDU.h"
 #include "OCTET_STRING.h"
-
+#include "PrintableString.h"
 }
 
 namespace encoding {
@@ -38,20 +37,19 @@ namespace encoding {
     long ranFunctionId;
     OCTET_STRING_t *ranFunctionDesc;
     long ranFunctionRev;
+    PrintableString_t *ranFunctionOId;
   };
   
   long get_function_id_from_subscription(E2AP_PDU_t *e2ap_pdu);
   
   void buildSubsReq(E2AP_PDU_t *pdu);
-
-  void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs, uint8_t *gnb_id, uint8_t *plmn_id);
+  
+  void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs);
   
   void generate_e2apv1_setup_response(E2AP_PDU_t *setup_resp_pdu);
   
   void generate_e2apv1_subscription_request(E2AP_PDU_t *sub_req_pdu);
-
-  void generate_e2apv1_ric_control_acknowledge(E2AP_PDU_t *control_resp_pdu);
-
+  
   void generate_e2apv1_subscription_response(E2AP_PDU_t *sub_resp_pdu, E2AP_PDU_t *sub_req_pdu);
   
   void generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[], long reqActionIdsRejected[], int accept_size, int reject_size, long reqRequestorId, long reqInstanceId);
@@ -60,7 +58,11 @@ namespace encoding {
   
   void generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs);
 
-  long get_function_id_from_control_request(E2AP_PDU_t *pdu);
+  void generate_e2apv2_config_update(E2AP_PDU_t *e2ap_edu);
+
+  void generate_e2apv2_reset_request(E2AP_PDU_t *e2ap_pdu);
+
+  void generate_e2apv2_reset_response(E2AP_PDU_t *e2ap_pdu);
 }
 
 #endif

@@ -17,16 +17,17 @@
 
 add_executable( kpm_sim kpm_callbacks.cpp encode_kpm.cpp )
 
-add_dependencies( kpm_sim asn1objects )
+add_dependencies( kpm_sim asn1_objects )
 include_directories(.)
-include_directories(../ASN1c)
+include_directories(../../asn1c)
 include_directories(/usr/local/include/e2sim)
 include_directories(/usr/local/include)
 
-target_link_libraries( kpm_sim asn1objects )
+target_link_libraries( kpm_sim asn1_objects )
 target_link_libraries( kpm_sim e2sim )
-target_link_libraries( kpm_sim asn1objects )
+target_link_libraries( kpm_sim asn1_objects )
 target_link_libraries( kpm_sim pthread)
+#target_link_libraries( kpm_sim /usr/local/lib/libe2sim.a)
 
 install( 
     TARGETS kpm_sim

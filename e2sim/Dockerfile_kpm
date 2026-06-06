@@ -1,0 +1,94 @@
+# vim: ts=4 sw=4 noet:
+#==================================================================================
+#	Copyright (c) 2018-2019 AT&T Intellectual Property.
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#	   http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#==================================================================================
+
+
+# --------------------------------------------------------------------------------------
+#	Mnemonic:	Dockerfile
+#	Abstract:	This dockerfile is used to create an image that can be used to
+#				run the traffic steering xAPP in a container.
+#
+#				Building should be as simple as:
+#
+#					docker build -f Dockerfile -t ric-app-ts:[version]
+#
+#	Date:		27 April 2020
+#	Author:		E. Scott Daniels
+# --------------------------------------------------------------------------------------
+
+# the builder has: git, wget, cmake, gcc/g++, make, python2/3. v7 dropped nng support
+#
+ARG CONTAINER_PULL_REGISTRY=nexus3.o-ran-sc.org:10001
+FROM ${CONTAINER_PULL_REGISTRY}/o-ran-sc/bldr-ubuntu22-c-go:1.0.0 as buildenv
+
+# spaces to save things in the build image to copy to final image
+RUN mkdir -p /playpen/assets /playpen/src /playpen/bin /playpen/asn1c /playpen/e2sim
+ARG SRC=.
+
+WORKDIR /playpen
+
+# versions we snarf from package cloud
+ARG E2SIM_VER=1.0.0
+
+RUN apt-get update \
+	&& apt-get install -y \
+	build-essential \
+	git \
+	cmake \
+	libsctp-dev \
+	lksctp-tools \
+	autoconf \
+	automake \
+	libtool \
+	bison \
+	flex \
+  libboost-all-dev \
+	iputils-ping \
+	net-tools \
+	nano \
+	vim \
+	tcpdump \
+	net-tools \
+	nmap \
+  && apt-get clean
+
+COPY asn1c/ /playpen/e2sim/asn1c
+COPY e2sm_examples/ /playpen/e2sim/e2sm_examples
+COPY src/ /playpen/e2sim/src
+COPY CMakeLists.txt /playpen/e2sim
+
+RUN mkdir /playpen/e2sim/build && cd /playpen/e2sim/build && cmake .. && make package && cmake .. -DDEV_PKG=1 && make package
+
+RUN dpkg -i /playpen/e2sim/build/e2sim_1.0.0_amd64.deb /playpen/e2sim/build/e2sim-dev_1.0.0_amd64.deb
+
+RUN rm -rf /playpen/e2sim
+
+RUN mkdir /usr/local/include/nlohmann
+RUN git clone https://github.com/azadkuh/nlohmann_json_release.git
+RUN cp nlohmann_json_release/json.hpp /usr/local/include/nlohmann
+
+COPY ./e2sm_examples/kpm_e2sm/ /playpen/src/
+COPY asn1c/ /playpen/src/asn1c/
+RUN wc -l /playpen/src/reports.json
+ RUN cd /playpen/src && \
+ 		rm -fr .build &&\
+		mkdir  .build && \
+		cd .build && \
+		cmake .. && \
+		make install
+
+#CMD sleep 100000000000
+#CMD kpm_sim 10.111.138.172 32222

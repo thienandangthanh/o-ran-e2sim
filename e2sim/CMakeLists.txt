@@ -6,16 +6,6 @@ set ( major_version "1" )
 set ( minor_version "0" )
 set ( patch_level "0" )
 
-message(STATUS "LOG_LEVEL: ${LOG_LEVEL}")
-
-if(${LOG_LEVEL})
-	message(STATUS "Gonna use custom log level")
-	add_compile_definitions(LOG_LEVEL_USER=${LOG_LEVEL})
-else()
-	message(STATUS "Gonna set default log level")
-	add_compile_definitions(LOG_LEVEL_USER=3)
-endif()
-
 set( install_root "${CMAKE_INSTALL_PREFIX}" )
 set( install_inc "include/e2sim" )
 
@@ -26,6 +16,8 @@ else()
 endif()
 
 include ( GNUInstallDirs )
+
+add_definitions("-D ASN_DISABLE_OER_SUPPORT")
 
 if( NOT CMAKE_INSTALL_LIBDIR )
 	set( CMAKE_INSTALL_LIBDIR "lib" )
@@ -74,7 +66,6 @@ endif()
 # bleeding cmake names are short novels; and when lines cannot be split they're a pain
 set ( srcd "${CMAKE_CURRENT_SOURCE_DIR}" )
 
-
 # this gets us round a chicken/egg problem. include files don't exist until make is run
 # but Cmake insists on having these exist when we add them to include directories to
 # enable code to find them after we build them.
@@ -100,7 +91,7 @@ unset( GPROF CACHE )					# we don't want this to persist
 
 
 
-add_subdirectory(src/ASN1c)
+add_subdirectory(./asn1c)
 add_subdirectory(src/DEF)
 add_subdirectory(src/SCTP)
 add_subdirectory(src/messagerouting)
@@ -118,7 +109,7 @@ add_library( e2sim_shared SHARED
 # we only build/export the static archive (.a) if generating a dev package
 if( DEV_PKG )
     	add_library( e2sim_static STATIC
-        	     "$<TARGET_OBJECTS:def_objects>;$<TARGET_OBJECTS:sctp_objects>;$<TARGET_OBJECTS:messagerouting_objects>;$<TARGET_OBJECTS:encoding_objects>;$<TARGET_OBJECTS:base_objects>;$<TARGET_OBJECTS:asn1_objects>"
+        	     "$<TARGET_OBJECTS:def_objects>;$<TARGET_OBJECTS:sctp_objects>;$<TARGET_OBJECTS:messagerouting_objects>;$<TARGET_OBJECTS:encoding_objects>;$<TARGET_OBJECTS:base_objects>"
 	)
 
 	set_target_properties( e2sim_static
@@ -128,7 +119,7 @@ if( DEV_PKG )
    			       VERSION ${major_version}.${minor_version}.${patch_level}
 	)
 
-	target_include_directories( e2sim_static PUBLIC "src/DEF" "src/SCTP" "src/messagerouting" "src/base" "src/encoding" "src/ASN1c" )	
+	target_include_directories( e2sim_static PUBLIC "src/DEF" "src/SCTP" "src/messagerouting" "src/base" "src/encoding" )	
 endif()
 
 
@@ -182,5 +173,3 @@ IF( EXISTS "${CMAKE_ROOT}/Modules/CPack.cmake" )
 
 	INCLUDE( CPack )
 ENDIF()
-
-unset( LOG_LEVEL CACHE ) # prevent from being a hidden setting if user redoes things

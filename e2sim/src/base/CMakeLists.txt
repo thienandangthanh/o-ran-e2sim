@@ -19,9 +19,9 @@
 # For clarity: this generates object, not a lib as the CM command implies.
 #
 
-add_library( base_objects OBJECT e2sim.cpp signal_handler.cpp signal_handler.hpp)
+add_library( base_objects OBJECT e2sim.cpp)
 
-include_directories(../ASN1c)
+include_directories(../../asn1c)
 
 target_include_directories (base_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

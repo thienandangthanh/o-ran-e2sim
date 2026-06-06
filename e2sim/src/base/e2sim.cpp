@@ -17,10 +17,11 @@
 #                                                                            *
 ******************************************************************************/
 
-#include <cstdio>
+#include <stdio.h>
 #include <unistd.h>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <vector>
 
 #include "e2sim.hpp"
@@ -28,21 +29,24 @@
 #include "e2sim_sctp.hpp"
 #include "e2ap_message_handler.hpp"
 #include "encode_e2apv1.hpp"
-#include "signal_handler.hpp"
+#include "RANfunctionOID.h"
 
 using namespace std;
 
-std::unordered_map<long , OCTET_STRING_t*> E2Sim::getRegistered_ran_functions() {
+int client_fd = 0;
+
+std::unordered_map<long, OCTET_STRING_t*> E2Sim::getRegistered_ran_functions() {
   return ran_functions_registered;
 }
 
 void E2Sim::register_subscription_callback(long func_id, SubscriptionCallback cb) {
-  LOG_I("%%%%about to register callback for subscription for func_id %ld", func_id);
+  LOG_I("About to register callback for subscription for RAN function with ID %d", func_id);
   subscription_callbacks[func_id] = cb;
+  
 }
 
 SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
-  LOG_I("%%%%we are getting the subscription callback for func id %ld", func_id);
+  LOG_I("We are getting the subscription callback for func id %d", func_id);
   SubscriptionCallback cb;
 
   try {
@@ -51,36 +55,16 @@ SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
     throw std::out_of_range("Function ID is not registered");
   }
   return cb;
-}
 
-void E2Sim::register_sm_callback(long func_id, SmCallback cb) {
-    LOG_I("%%%%about to register callback for e2sm for func_id %ld", func_id);
-    sm_callbacks[func_id] = cb;
-}
-
-SmCallback E2Sim::get_sm_callback(long func_id) {
-    LOG_I("%%%%we are getting the e2sm callback for func id %ld\n", func_id);
-    SmCallback cb;
-    try {
-        cb = sm_callbacks.at(func_id);
-    } catch (const std::out_of_range &e) {
-        LOG_E("Function ID is not registered");
-        throw std::out_of_range("Function ID is not registered");
-    }
-    return cb;
 }
 
 void E2Sim::register_e2sm(long func_id, OCTET_STRING_t *ostr) {
 
   //Error conditions:
   //If we already have an entry for func_id
-
-  LOG_I("%%%%about to register e2sm func desc for %ld\n", func_id);
-
+  LOG_I("About to register E2SM RAN function description with ID %d", func_id);
   ran_functions_registered[func_id] = ostr;
-
 }
-
 
 void E2Sim::encode_and_send_sctp_data(E2AP_PDU_t* pdu)
 {
@@ -89,8 +73,7 @@ void E2Sim::encode_and_send_sctp_data(E2AP_PDU_t* pdu)
 
   data.len = e2ap_asn1c_encode_pdu(pdu, &buf);
   memcpy(data.buffer, buf, min(data.len, MAX_SCTP_BUFFER));
-
-  LOG_I("Send data to client_fd %d", client_fd)
+  if (buf) free(buf);
   sctp_send_data(client_fd, data);
 }
 
@@ -100,8 +83,8 @@ void E2Sim::wait_for_sctp_data()
   sctp_buffer_t recv_buf;
   if(sctp_receive_data(client_fd, recv_buf) > 0)
   {
-    LOG_D("[SCTP] Received new data of size %d", recv_buf.len);
-      e2ap_handle_sctp_data(client_fd, recv_buf, this);
+    LOG_I("[SCTP] Received new data of size %d", recv_buf.len);
+    e2ap_handle_sctp_data(client_fd, recv_buf, false, this);
   }
 }
 
@@ -117,84 +100,113 @@ void E2Sim::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu,
 }
 
 int E2Sim::run_loop(int argc, char* argv[]){
+
+  LOG_I("Start E2 Agent (E2 Simulator)");
+
+  ifstream simfile;
+  string line;
+
+  simfile.open("simulation.txt", ios::in);
+
+  if (simfile.is_open()) {
+
+    while (getline(simfile, line)) {
+      cout << line << "\n";
+    }
+
+    simfile.close();
+
+  }
+
+  bool xmlenc = false;
+
   options_t ops = read_input_options(argc, argv);
-  LOG_D("After reading input options");
-  return run_loop(ops.server_ip,ops.server_port,ops.client_port,ops.gnb_id,ops.plmn_id);
-}
 
-int E2Sim::run_loop(std::string server_ip, uint16_t server_port, uint16_t local_port, std::string gnb_id, std::string plmn_id) {
-    LOG_U("Start E2 Agent (E2 Simulator)");
-    LOG_U("Current Log level is %d", LOG_LEVEL);
+  LOG_I("After reading input options");
 
-    client_fd = sctp_start_client(server_ip.c_str(), server_port, local_port);
-    auto *pdu_setup = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU));
+  //E2 Agent will automatically restart upon sctp disconnection
+  //  int server_fd = sctp_start_server(ops.server_ip, ops.server_port);
 
-    LOG_D("After starting client\n");
-    LOG_D("client_fd value is %d\n", client_fd);
+  client_fd = sctp_start_client(ops.server_ip, ops.server_port);
+  E2AP_PDU_t* pdu_setup = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
 
-    std::vector<encoding::ran_func_info> all_funcs;
+  LOG_I("SCTP client has been started");
+  
+  std::vector<encoding::ran_func_info> all_funcs;
+  RANfunctionOID_t *ranFunctionOIDe = (RANfunctionOID_t*)calloc(1,sizeof(RANfunctionOID_t));
+  uint8_t *buf = (uint8_t*)"OID123";
+  ranFunctionOIDe->buf = (uint8_t*)calloc(1,strlen((char*)buf)+1);
+  memcpy(ranFunctionOIDe->buf, buf, strlen((char*)buf)+1);
+  ranFunctionOIDe->size = strlen((char*)buf);
 
-    // Loop through RAN function definitions that are registered
+  //Loop through RAN function definitions that are registered
+  LOG_I("Constructing a list of RAN functions based on registered information");
+  for (std::pair<long, OCTET_STRING_t*> elem : ran_functions_registered) {
+    char* ran_desc = (char*) calloc(1, elem.second->size+1);
+    ran_desc = (char*)elem.second->buf;
+    ran_desc[elem.second->size] = '\0';
 
-    for (std::pair<long, OCTET_STRING_t*> elem : ran_functions_registered) {
-        LOG_D("Looping through ran func");
-        encoding::ran_func_info next_func{};
+    LOG_I("Adding RAN function ID %ld, description: %s to the list", elem.first, ran_desc);
 
-        next_func.ranFunctionId = elem.first;
-        next_func.ranFunctionDesc = elem.second;
-        next_func.ranFunctionRev = (long)2;
-        all_funcs.push_back(next_func);
-    }
+    encoding::ran_func_info next_func;
 
-    LOG_D("About to call setup request encode");
+    next_func.ranFunctionId = elem.first;
+    next_func.ranFunctionDesc = elem.second;
+    next_func.ranFunctionRev = (long)2;
+    next_func.ranFunctionOId = ranFunctionOIDe;
 
-    generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs, (uint8_t *) gnb_id.c_str(), (uint8_t *) plmn_id.c_str());
+    all_funcs.push_back(next_func);
+  }
+    
+  LOG_I("Generate E2AP v1 setup request for all registered RAN functions");
+  generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs);
 
-    LOG_D("After generating e2setup req\n");
+  xer_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_setup);
 
-    if (LOG_LEVEL == LOG_LEVEL_DEBUG)
-        xer_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_setup);
+  auto buffer_size = MAX_SCTP_BUFFER;
+  unsigned char buffer[MAX_SCTP_BUFFER];
+  
+  sctp_buffer_t data;
 
-    LOG_D("After XER Encoding\n");
+  char error_buf[300] = {0, };
+  size_t errlen = 0;
 
-    sctp_buffer_t data_buf;
-    memset(data_buf.buffer, 0, MAX_SCTP_BUFFER);
-    data_buf.len = 0;
+  asn_check_constraints(&asn_DEF_E2AP_PDU, pdu_setup, error_buf, &errlen);
+  LOG_I("Error length %d, error buf %s", errlen, error_buf);
 
-    char *error_buf = (char*)calloc(300, sizeof(char));
-    size_t errlen;
+  auto er = asn_encode_to_buffer(nullptr, ATS_ALIGNED_BASIC_PER, &asn_DEF_E2AP_PDU, pdu_setup, buffer, buffer_size);
 
-    auto err_ret = asn_check_constraints(&asn_DEF_E2AP_PDU, pdu_setup, error_buf, &errlen);
-    if (err_ret == -1) {
-        LOG_E("E2 Setup request constraints check failed, reason:\n%s", error_buf);
-    }
+  data.len = er.encoded;
 
-    auto er = asn_encode_to_buffer(nullptr, ATS_ALIGNED_BASIC_PER, &asn_DEF_E2AP_PDU, pdu_setup, data_buf.buffer, MAX_SCTP_BUFFER);
+  LOG_I("Error encoded %d", er.encoded);
 
-    data_buf.len = er.encoded;
+  memcpy(data.buffer, buffer, er.encoded);
 
-    if(sctp_send_data(client_fd, data_buf) > 0) {
-        LOG_I("[SCTP] Sent E2-SETUP-REQUEST");
-    } else {
-        LOG_E("[SCTP] Unable to send E2-SETUP-REQUEST to peer");
-    }
+  if(sctp_send_data(client_fd, data) > 0) {
+    LOG_I("Sent E2-SETUP-REQUEST as E2AP message");
+  } else {
+    LOG_E("Fail to send E2-SETUP-REQUEST to peer");
+  }
 
-    LOG_D("[SCTP] Waiting for SCTP data");
+  buffer_size = MAX_SCTP_BUFFER;
+  memset(buffer, '\0', sizeof(buffer));
 
-    try {
-        SignalHandler signalHandler;
-        while (SignalHandler::isRunning()) //constantly looking for data on SCTP interface
-        {
-            if (sctp_receive_data(client_fd, data_buf) <= 0)
-                break;
+  sctp_buffer_t recv_buf;
 
-            LOG_D("[SCTP] Received new data of size %d", data_buf.len);
+  LOG_I("Waiting for SCTP data");
 
-            e2ap_handle_sctp_data(client_fd, data_buf, this);
-        }
-    } catch (SignalException &e) {
-        LOG_E("SIGINT raised, possible cause: %s", strsignal(SIGINT));
-    }
+  while(1) //constantly looking for data on SCTP interface
+  {
+    if(sctp_receive_data(client_fd, recv_buf) <= 0)
+      break;
 
-    return EXIT_SUCCESS;
+    LOG_I("Received new data of size %d", recv_buf.len);
+
+    e2ap_handle_sctp_data(client_fd, recv_buf, xmlenc, this);
+    if (xmlenc) xmlenc = false;
+  }
+
+  close(client_fd);
+
+  return 0;
 }

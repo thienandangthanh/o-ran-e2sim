@@ -37,9 +37,16 @@ private:
   std::unordered_map<long, OCTET_STRING_t*> ran_functions_registered;
   std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
 
+  // SCTP client source port to bind (0 => historic RIC_SCTP_SRC_PORT default).
+  // Set per-instance by ns-3 so multiple embedded E2 agents don't collide.
+  int m_client_src_port = 0;
+
   void wait_for_sctp_data();
-  
+
 public:
+
+  void set_client_src_port(int port) { m_client_src_port = port; }
+
 
   std::unordered_map<long, OCTET_STRING_t*> getRegistered_ran_functions();
 

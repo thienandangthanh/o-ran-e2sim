@@ -26,7 +26,10 @@ const int SERVER_LISTEN_QUEUE_SIZE  = 10;
 
 int sctp_start_server(const char *server_ip_str, const int server_port);
 
-int sctp_start_client(const char *server_ip_str, const int server_port);
+// src_port: SCTP client source port to bind. 0 => default RIC_SCTP_SRC_PORT.
+// ns-3 embeds multiple E2 agents in one process; each must bind a UNIQUE source
+// port or the (src,dst) 4-tuple collides and connect() fails (EADDRNOTAVAIL).
+int sctp_start_client(const char *server_ip_str, const int server_port, const int src_port = 0);
 
 int sctp_accept_connection(const char *server_ip_str, const int server_fd);
 

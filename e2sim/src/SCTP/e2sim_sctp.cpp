@@ -112,7 +112,7 @@ int sctp_start_server(const char *server_ip_str, const int server_port)
   return server_fd;
 }
 
-int sctp_start_client(const char *server_ip_str, const int server_port)
+int sctp_start_client(const char *server_ip_str, const int server_port, const int src_port)
 {
   int client_fd, af;
 
@@ -172,12 +172,15 @@ int sctp_start_client(const char *server_ip_str, const int server_port)
     exit(1);
   }
 
+  // 0 => default (standalone single-agent sims keep the historic 36422);
+  // ns-3 passes a per-gNB unique source port so concurrent agents don't collide.
+  const int bind_port = (src_port > 0) ? src_port : RIC_SCTP_SRC_PORT;
   struct sockaddr_in6  client6_addr {};
   client6_addr.sin6_family = AF_INET6;
-  client6_addr.sin6_port   = htons(RIC_SCTP_SRC_PORT);
+  client6_addr.sin6_port   = htons(bind_port);
   client6_addr.sin6_addr   = in6addr_any;
 
-  LOG_I("[SCTP] Binding client socket to source port %d", RIC_SCTP_SRC_PORT);
+  LOG_I("[SCTP] Binding client socket to source port %d", bind_port);
   if(bind(client_fd, (struct sockaddr*)&client6_addr, sizeof(client6_addr)) == -1) {
     perror("bind");
     exit(1);

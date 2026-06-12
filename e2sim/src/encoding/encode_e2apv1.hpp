@@ -41,7 +41,19 @@ namespace encoding {
   };
   
   long get_function_id_from_subscription(E2AP_PDU_t *e2ap_pdu);
-  
+
+  // Extract the RAN-function-ID carried in a RICcontrolRequest (procedureCode 4).
+  // Mirrors get_function_id_from_subscription; used to route control to the
+  // registered E2SM callback (Phase 4 — RC receive + ACK).
+  long get_function_id_from_control(E2AP_PDU_t *e2ap_pdu);
+
+  // Build a minimal RICcontrolAcknowledge (SuccessfulOutcome). E2AP v03.01
+  // RICcontrolAcknowledge only mandates RICrequestID + RANfunctionID; the
+  // optional RICcallProcessID / RICcontrolOutcome are omitted for the no-op
+  // M-RC1 ACK. NOTE: caller must NOT run asn_check_constraints on RC PDUs.
+  void generate_e2apv1_control_acknowledge(E2AP_PDU_t *e2ap_pdu, long requestorId,
+                                           long instanceId, long ranFunctionId);
+
   void buildSubsReq(E2AP_PDU_t *pdu);
   
   void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs);

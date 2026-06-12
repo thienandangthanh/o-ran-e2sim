@@ -126,6 +126,39 @@ void e2ap_handle_sctp_data(int& socket_fd, sctp_buffer_t& data, bool xmlenc, E2S
       }
       break;
 
+    case ProcedureCode_id_RICcontrol:  // RIC CONTROL = 4
+      LOG_I("Received a message of RIC control procedure");
+      switch (index) {
+        case E2AP_PDU_PR_initiatingMessage: {  // RICcontrolRequest
+          long func_id = encoding::get_function_id_from_control(pdu);
+          LOG_I("Received RIC control request for function with ID %ld", func_id);
+
+          try {
+            SubscriptionCallback cb;
+            cb = e2sim->get_subscription_callback(func_id);
+            LOG_I("Calling control callback for function with ID %ld", func_id);
+            cb(pdu);
+          } catch (const std::out_of_range& e) {
+            LOG_E("No RAN Function with this ID exists for control\n");
+          }
+
+          break;
+        }
+
+        case E2AP_PDU_PR_successfulOutcome:
+          LOG_I("Received RIC-CONTROL-ACKNOWLEDGE");
+          break;
+
+        case E2AP_PDU_PR_unsuccessfulOutcome:
+          LOG_I("Received RIC-CONTROL-FAILURE");
+          break;
+
+        default:
+          LOG_E("Invalid message index=%d in E2AP-PDU", index);
+          break;
+      }
+      break;
+
     case ProcedureCode_id_RICindication:  // 205
       LOG_I("Received a message of RIC indication procedure");
       switch (index) {

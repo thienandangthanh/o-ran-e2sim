@@ -47,6 +47,8 @@ extern "C" {
 #include "RICeventTriggerDefinition.h"
 #include "RICsubscriptionRequest.h"
 #include "RICsubscriptionResponse.h"
+#include "RICcontrolRequest.h"
+#include "RICcontrolAcknowledge.h"
 #include "ProtocolIE-SingleContainer.h"
 #include "RANfunctions-List.h"
 #include "RICindication.h"
@@ -1016,4 +1018,73 @@ void encoding::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_p
   if(ret) {
     LOG_I("Constraint validation of E2AP PDU message failed: %s\n", error_buf);
   }
+}
+
+// ===========================================================================
+// E2SM-RC control path (Phase 4 — RC receive + ACK).
+// ===========================================================================
+
+long encoding::get_function_id_from_control(E2AP_PDU_t *e2ap_pdu) {
+
+  RICcontrolRequest_t orig_req =
+    e2ap_pdu->choice.initiatingMessage->value.choice.RICcontrolRequest;
+
+  int count = orig_req.protocolIEs.list.count;
+  RICcontrolRequest_IEs_t **ies =
+    (RICcontrolRequest_IEs_t **)orig_req.protocolIEs.list.array;
+
+  long func_id = -1;
+  for (int i = 0; i < count; i++) {
+    RICcontrolRequest_IEs_t *next_ie = ies[i];
+    if (next_ie->value.present == RICcontrolRequest_IEs__value_PR_RANfunctionID) {
+      func_id = next_ie->value.choice.RANfunctionID;
+    }
+  }
+
+  LOG_I("[E2AP] RIC Control Request carries RAN function id %ld", func_id);
+  return func_id;
+}
+
+void encoding::generate_e2apv1_control_acknowledge(E2AP_PDU_t *e2ap_pdu, long requestorId,
+                                                   long instanceId, long ranFunctionId) {
+
+  // RICrequestID (mandatory) — echo the requestor/instance from the request.
+  RICcontrolAcknowledge_IEs_t *ackReqId =
+    (RICcontrolAcknowledge_IEs_t *)calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+  ackReqId->id = ProtocolIE_ID_id_RICrequestID;
+  ackReqId->criticality = 0;
+  ackReqId->value.present = RICcontrolAcknowledge_IEs__value_PR_RICrequestID;
+  ackReqId->value.choice.RICrequestID.ricRequestorID = requestorId;
+  ackReqId->value.choice.RICrequestID.ricInstanceID = instanceId;
+
+  // RANfunctionID (mandatory).
+  RICcontrolAcknowledge_IEs_t *ackFuncId =
+    (RICcontrolAcknowledge_IEs_t *)calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+  ackFuncId->id = ProtocolIE_ID_id_RANfunctionID;
+  ackFuncId->criticality = 0;
+  ackFuncId->value.present = RICcontrolAcknowledge_IEs__value_PR_RANfunctionID;
+  ackFuncId->value.choice.RANfunctionID = ranFunctionId;
+
+  RICcontrolAcknowledge_t *ricControlAck =
+    (RICcontrolAcknowledge_t *)calloc(1, sizeof(RICcontrolAcknowledge_t));
+  ASN_SEQUENCE_ADD(&ricControlAck->protocolIEs.list, ackReqId);
+  ASN_SEQUENCE_ADD(&ricControlAck->protocolIEs.list, ackFuncId);
+
+  SuccessfulOutcome_t *successOutcome =
+    (SuccessfulOutcome_t *)calloc(1, sizeof(SuccessfulOutcome_t));
+  successOutcome->procedureCode = ProcedureCode_id_RICcontrol;
+  successOutcome->criticality = 0;
+  successOutcome->value.present = SuccessfulOutcome__value_PR_RICcontrolAcknowledge;
+  successOutcome->value.choice.RICcontrolAcknowledge = *ricControlAck;
+  if (ricControlAck) free(ricControlAck);
+
+  e2ap_pdu->present = E2AP_PDU_PR_successfulOutcome;
+  e2ap_pdu->choice.successfulOutcome = successOutcome;
+
+  // Deliberately NOT calling asn_check_constraints — it infinite-loops on
+  // RANParameter-bearing RC PDUs in this asn1c build (Phase-3 landmine). The ACK
+  // carries none, but keep the discipline uniform for the RC procedure.
+  LOG_I("[E2AP] Generated RIC Control Acknowledge (reqId=%ld inst=%ld funcId=%ld)",
+        requestorId, instanceId, ranFunctionId);
+  xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
 }

@@ -157,17 +157,23 @@ void encoding::generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<
   e2ap_pdu->choice.initiatingMessage = initiatingMessage;
 }
 
-void encoding::generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs) {
+void encoding::generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs,
+                                                           uint32_t gnb_id_value, std::vector<uint8_t> served_cells) {
 
-  BIT_STRING_t *gnb_bstring = (BIT_STRING_t*)calloc(1, sizeof(BIT_STRING_t));;
+  BIT_STRING_t *gnb_bstring = (BIT_STRING_t*)calloc(1, sizeof(BIT_STRING_t));
   gnb_bstring->buf = (uint8_t*)calloc(1,4);
   gnb_bstring->size = 4;
-  gnb_bstring->buf[0] = 0xB5;
-  gnb_bstring->buf[1] = 0xC6;
-  gnb_bstring->buf[2] = 0x77;
-  gnb_bstring->buf[3] = 0x88;
+  // L-release multi-gNB: derive the GlobalE2node gNB-ID from the per-node value
+  // ns-3 supplies (E2Sim::set_e2node_identity). Each embedded mmWave gNB MUST
+  // advertise a UNIQUE id, else E2MGR coalesces them all into one ranName.
+  // bits_unused=0 => full 32-bit id => E2MGR renders 8 lowercase hex nibbles
+  // (the ranName suffix a Traffic-Steering xApp greps for to build its cell map).
+  gnb_bstring->buf[0] = (uint8_t)((gnb_id_value >> 24) & 0xFF);
+  gnb_bstring->buf[1] = (uint8_t)((gnb_id_value >> 16) & 0xFF);
+  gnb_bstring->buf[2] = (uint8_t)((gnb_id_value >> 8) & 0xFF);
+  gnb_bstring->buf[3] = (uint8_t)(gnb_id_value & 0xFF);
 
-  gnb_bstring->bits_unused = 3;
+  gnb_bstring->bits_unused = 0;
 
   uint8_t *buf2 = (uint8_t *)"747";
   OCTET_STRING_t *plmn = (OCTET_STRING_t*)calloc(1, sizeof(OCTET_STRING_t));
@@ -268,10 +274,32 @@ intfNG->amf_name = (AMFName_t)(nginterf);
 
 e2configAdditionItem->value.choice.E2nodeComponentConfigAddition_Item.e2nodeComponentID.choice.e2nodeComponentInterfaceTypeNG = intfNG;
 
+// L-release multi-gNB cell discovery: a Traffic-Steering xApp builds its cell->node
+// map by base64-decoding E2MGR's hex rendering of this requestPart, grepping it for
+// the gNB-id hex prefix, then taking the following byte as the cell id. Emit, per
+// served cell, the 4 gNB-id value bytes followed by the cell-id byte: E2MGR renders
+// [16 b8 ce NN | NN] -> "16b8ceNNNN" -> the xApp extracts the 10-char cell key
+// "16b8ceNNNN"; rc later hex-decodes it and ns-3 reads the last byte = NN as the
+// target cell. Falls back to the bare gNB-id when no served cell was supplied
+// (single-gNB parity with the historic placeholder behaviour).
+size_t nReqCells = served_cells.size();
+size_t reqPartLen = (nReqCells > 0) ? nReqCells * 5 : 4;
 OCTET_STRING_t reqPart;
-reqPart.buf = (uint8_t*)calloc(1,7);
-memcpy(reqPart.buf, (uint8_t *)"reqpart", 7);
-reqPart.size = 7;
+reqPart.buf = (uint8_t*)calloc(1, reqPartLen);
+reqPart.size = reqPartLen;
+for (size_t ci = 0; ci < nReqCells; ci++) {
+  reqPart.buf[ci*5 + 0] = (uint8_t)((gnb_id_value >> 24) & 0xFF);
+  reqPart.buf[ci*5 + 1] = (uint8_t)((gnb_id_value >> 16) & 0xFF);
+  reqPart.buf[ci*5 + 2] = (uint8_t)((gnb_id_value >> 8) & 0xFF);
+  reqPart.buf[ci*5 + 3] = (uint8_t)(gnb_id_value & 0xFF);
+  reqPart.buf[ci*5 + 4] = served_cells[ci];
+}
+if (nReqCells == 0) {
+  reqPart.buf[0] = (uint8_t)((gnb_id_value >> 24) & 0xFF);
+  reqPart.buf[1] = (uint8_t)((gnb_id_value >> 16) & 0xFF);
+  reqPart.buf[2] = (uint8_t)((gnb_id_value >> 8) & 0xFF);
+  reqPart.buf[3] = (uint8_t)(gnb_id_value & 0xFF);
+}
 
 e2configAdditionItem->value.choice.E2nodeComponentConfigAddition_Item.e2nodeComponentConfiguration.e2nodeComponentRequestPart = reqPart;
 

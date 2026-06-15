@@ -159,7 +159,7 @@ int E2Sim::run_loop(int argc, char* argv[]){
   }
     
   LOG_I("Generate E2AP v1 setup request for all registered RAN functions");
-  generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs);
+  generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs, m_gnb_id_value, m_served_cells);
 
   xer_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_setup);
 

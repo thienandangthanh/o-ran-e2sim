@@ -22,6 +22,7 @@
 #define ENCODE_E2APV1_HPP
 
 #include <vector>
+#include <cstdint>
 
 
 extern "C" {
@@ -56,7 +57,13 @@ namespace encoding {
 
   void buildSubsReq(E2AP_PDU_t *pdu);
   
-  void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs);
+  // L-release: gnb_id_value sets the GlobalE2node gNB-ID advertised on the wire
+  // (unique per embedded mmWave gNB so E2MGR doesn't coalesce them); served_cells
+  // are this node's cell ids, emitted into e2nodeComponentRequestPart so an xApp can
+  // map cell -> owning node. Defaults preserve historic single-gNB behaviour.
+  void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs,
+                                                   uint32_t gnb_id_value = 0x16B8CEF1,
+                                                   std::vector<uint8_t> served_cells = std::vector<uint8_t>());
   
   void generate_e2apv1_setup_response(E2AP_PDU_t *setup_resp_pdu);
   

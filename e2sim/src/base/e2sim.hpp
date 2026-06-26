@@ -43,6 +43,13 @@ private:
   // Set per-instance by ns-3 so multiple embedded E2 agents don't collide.
   int m_client_src_port = 0;
 
+  // SCTP client socket fd for THIS agent's association. Per-instance (NOT a
+  // process global): ns-3 embeds one E2Sim per gNB in a single process, each
+  // running run_loop() on its own thread. A shared global fd would be clobbered
+  // by whichever agent connect()s last, leaving every other agent's socket
+  // unread (kernel ACKs the data, userspace never recv()s it).
+  int client_fd = 0;
+
   // GlobalE2node gNB-ID value advertised in the E2 Setup, and the cell ids this
   // node serves. Set per-instance by ns-3 (oran-interface E2Termination) so every
   // embedded mmWave gNB advertises a UNIQUE id (else E2MGR coalesces them all into

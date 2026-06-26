@@ -33,7 +33,10 @@
 
 using namespace std;
 
-int client_fd = 0;
+// NOTE: client_fd is a PER-INSTANCE member of E2Sim (see e2sim.hpp), NOT a file
+// global. ns-3 embeds one E2Sim per gNB in a single process; a process-global fd
+// would be overwritten by whichever agent connect()s last, so every recv loop
+// would read that one socket and the other agents' sockets would never be read.
 
 std::unordered_map<long, OCTET_STRING_t*> E2Sim::getRegistered_ran_functions() {
   return ran_functions_registered;
